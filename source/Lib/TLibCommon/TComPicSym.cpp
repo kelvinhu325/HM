@@ -416,6 +416,9 @@ Void TComPicSym::xInitTiles()
       //initialize the FirstCUAddr for each tile
       m_tileParameters[tileIdx].setFirstCtuRsAddr( (m_tileParameters[tileIdx].getBottomEdgePosInCtus() - m_tileParameters[tileIdx].getTileHeightInCtus() + 1) * getFrameWidthInCtus() +
                                                     m_tileParameters[tileIdx].getRightEdgePosInCtus()  - m_tileParameters[tileIdx].getTileWidthInCtus()  + 1);
+      {
+          //printf("kelvin ---> xInitTiles tile colrow=%d %d, tile edge left=%d, right=%d, top=%d, bottom=%d\n", col, row, m_tileParameters[tileIdx].getFirstCtuRsAddr() % getFrameWidthInCtus(), m_tileParameters[tileIdx].getRightEdgePosInCtus(), m_tileParameters[tileIdx].getFirstCtuRsAddr() / getFrameWidthInCtus(), m_tileParameters[tileIdx].getBottomEdgePosInCtus());
+      }
     }
   }
 

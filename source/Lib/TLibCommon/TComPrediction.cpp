@@ -660,6 +660,31 @@ Void TComPrediction::xPredInterBlk(const ComponentID compID, TComDataCU *cu, TCo
 
   const ChromaFormat chFmt = cu->getPic()->getChromaFormat();
 
+  if(isLuma(compID))
+  {
+      const UInt ctuRsAddr = cu->getCtuRsAddr();
+      const TComPic* pcPic = cu->getPic();
+      const TComTile &currentTile = *(pcPic->getPicSym()->getTComTile(pcPic->getPicSym()->getTileIdxMap(ctuRsAddr)));
+      const UInt maxCuWidth  = cu->getSlice()->getSPS()->getMaxCUWidth();
+      const UInt maxCuHeight = cu->getSlice()->getSPS()->getMaxCUHeight();
+      int tile_left_edge   = (currentTile.getFirstCtuRsAddr() % pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuWidth;
+      int tile_top_edge    = (currentTile.getFirstCtuRsAddr() / pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuHeight;
+      int tile_right_edge  = (currentTile.getRightEdgePosInCtus() + 1) * maxCuWidth;
+      int tile_bottom_edge = (currentTile.getBottomEdgePosInCtus() + 1) * maxCuHeight;
+      int mvxAbs = mv->getHor()+(cu->getCUPelX()<<shiftHor);
+      int mvyAbs = mv->getVer()+(cu->getCUPelY()<<shiftVer);
+      //printf("kelvin ---> xPredInterBlk tile cuxy=%d %d, cxwh=%d %d, mvxy=%d %d, tile edge left=%d, right=%d, top=%d, bottom=%d\n", cu->getCUPelX(), cu->getCUPelY(), cxWidth, cxHeight, mv->getHor(), mv->getVer(), currentTile.getFirstCtuRsAddr() % pcPic->getPicSym()->getFrameWidthInCtus(), currentTile.getRightEdgePosInCtus(), currentTile.getFirstCtuRsAddr() / pcPic->getPicSym()->getFrameWidthInCtus(), currentTile.getBottomEdgePosInCtus());
+      //printf("kelvin ---> shiftHor=%d, shiftVer=%d, xFrac=%d, yFrac=%d, lcusizewh=%d %d\n", shiftHor, shiftVer, xFrac, yFrac, cu->getSlice()->getSPS()->getMaxCUWidth(), cu->getSlice()->getSPS()->getMaxCUHeight());
+      if(mvxAbs < (tile_left_edge<<shiftHor) || (mvxAbs+(cxWidth<<shiftHor)) > (tile_right_edge<<shiftHor)) {
+        printf("failed ---> cuxy=%d %d, MV hor %d or mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mvxAbs, mvxAbs+(cxWidth<<shiftHor), tile_left_edge<<shiftHor, tile_right_edge<<shiftHor);
+        assert(0);
+      }
+      if(mvyAbs < (tile_top_edge<<shiftVer) || (mvyAbs+(cxHeight<<shiftVer)) > (tile_bottom_edge<<shiftVer)) {
+        printf("failed ---> cuxy=%d %d, MV ver %d or mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<shiftVer, tile_bottom_edge<<shiftVer);
+        assert(0);
+      }
+  }
+
   if ( yFrac == 0 )
   {
     m_if.filterHor(compID, ref, refStride, dst,  dstStride, cxWidth, cxHeight, xFrac, !bi, chFmt, bitDepth);
