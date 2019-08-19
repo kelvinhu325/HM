@@ -677,11 +677,11 @@ Void TComPrediction::xPredInterBlk(const ComponentID compID, TComDataCU *cu, TCo
       //printf("kelvin ---> shiftHor=%d, shiftVer=%d, xFrac=%d, yFrac=%d, lcusizewh=%d %d\n", shiftHor, shiftVer, xFrac, yFrac, cu->getSlice()->getSPS()->getMaxCUWidth(), cu->getSlice()->getSPS()->getMaxCUHeight());
       if(mvxAbs < (tile_left_edge<<shiftHor) || (mvxAbs+(cxWidth<<shiftHor)) > (tile_right_edge<<shiftHor)) {
         printf("failed ---> cuxy=%d %d, MV hor %d or mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mvxAbs, mvxAbs+(cxWidth<<shiftHor), tile_left_edge<<shiftHor, tile_right_edge<<shiftHor);
-        assert(0);
+        exit(EXIT_FAILURE);//assert(0);
       }
       if(mvyAbs < (tile_top_edge<<shiftVer) || (mvyAbs+(cxHeight<<shiftVer)) > (tile_bottom_edge<<shiftVer)) {
         printf("failed ---> cuxy=%d %d, MV ver %d or mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<shiftVer, tile_bottom_edge<<shiftVer);
-        assert(0);
+        exit(EXIT_FAILURE);//assert(0);
       }
   }
 
