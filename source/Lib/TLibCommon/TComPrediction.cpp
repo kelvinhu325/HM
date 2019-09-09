@@ -669,18 +669,89 @@ Void TComPrediction::xPredInterBlk(const ComponentID compID, TComDataCU *cu, TCo
       const UInt maxCuHeight = cu->getSlice()->getSPS()->getMaxCUHeight();
       int tile_left_edge   = (currentTile.getFirstCtuRsAddr() % pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuWidth;
       int tile_top_edge    = (currentTile.getFirstCtuRsAddr() / pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuHeight;
-      int tile_right_edge  = (currentTile.getRightEdgePosInCtus() + 1) * maxCuWidth;
-      int tile_bottom_edge = (currentTile.getBottomEdgePosInCtus() + 1) * maxCuHeight;
+      int tile_right_edge  = std::min<Int>((currentTile.getRightEdgePosInCtus() + 1) * maxCuWidth, refPic->getWidth(compID));
+      int tile_bottom_edge = std::min<Int>((currentTile.getBottomEdgePosInCtus() + 1) * maxCuHeight, refPic->getHeight(compID));
       int mvxAbs = mv->getHor()+(cu->getCUPelX()<<shiftHor);
       int mvyAbs = mv->getVer()+(cu->getCUPelY()<<shiftVer);
+      Bool outOfBound = false;
+                          //A00  a   b   c     d   e   f   g     h   i   j   k     n   p   q   r  spec 8.5.3.3.3.2
+      int deltaTop[4][4] = {{0,  0,  0,  0}, {-3, -3, -3, -3}, {-3, -3, -3, -3}, {-2, -2, -2, -2}};
+      int deltaBot[4][4] = {{0,  0,  0,  0}, { 3,  3,  3,  3}, { 4,  4,  4,  4}, { 4,  4,  4,  4}};
+      int deltaLef[4][4] = {{0, -3, -3, -2}, { 0, -3, -3, -2}, { 0, -3, -3, -2}, { 0, -3, -3, -2}};
+      int deltaRig[4][4] = {{0,  3,  4,  4}, { 0,  3,  4,  4}, { 0,  3,  4,  4}, { 0,  3,  4,  4}};
       //printf("kelvin ---> xPredInterBlk tile cuxy=%d %d, cxwh=%d %d, mvxy=%d %d, tile edge left=%d, right=%d, top=%d, bottom=%d\n", cu->getCUPelX(), cu->getCUPelY(), cxWidth, cxHeight, mv->getHor(), mv->getVer(), currentTile.getFirstCtuRsAddr() % pcPic->getPicSym()->getFrameWidthInCtus(), currentTile.getRightEdgePosInCtus(), currentTile.getFirstCtuRsAddr() / pcPic->getPicSym()->getFrameWidthInCtus(), currentTile.getBottomEdgePosInCtus());
       //printf("kelvin ---> shiftHor=%d, shiftVer=%d, xFrac=%d, yFrac=%d, lcusizewh=%d %d\n", shiftHor, shiftVer, xFrac, yFrac, cu->getSlice()->getSPS()->getMaxCUWidth(), cu->getSlice()->getSPS()->getMaxCUHeight());
       if(mvxAbs < (tile_left_edge<<shiftHor) || (mvxAbs+(cxWidth<<shiftHor)) > (tile_right_edge<<shiftHor)) {
-        printf("failed ---> cuxy=%d %d, MV hor %d or mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mvxAbs, mvxAbs+(cxWidth<<shiftHor), tile_left_edge<<shiftHor, tile_right_edge<<shiftHor);
-        exit(EXIT_FAILURE);//assert(0);
+        printf("failed: cuxy=%d %d, MV(%d, %d), mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvxAbs, mvxAbs+(cxWidth<<shiftHor), tile_left_edge<<shiftHor, tile_right_edge<<shiftHor);
+        outOfBound = true;
       }
       if(mvyAbs < (tile_top_edge<<shiftVer) || (mvyAbs+(cxHeight<<shiftVer)) > (tile_bottom_edge<<shiftVer)) {
-        printf("failed ---> cuxy=%d %d, MV ver %d or mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<shiftVer, tile_bottom_edge<<shiftVer);
+        printf("failed: cuxy=%d %d, MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<shiftVer, tile_bottom_edge<<shiftVer);
+        outOfBound = true;
+      }
+      // check luma sub MVs with interpolation filter
+      if(shiftHor==2 && ((mvxAbs+4*deltaLef[yFrac][xFrac]) < (tile_left_edge<<shiftHor) ||
+                         (mvxAbs+4*deltaRig[yFrac][xFrac]+(cxWidth<<shiftHor)) > (tile_right_edge<<shiftHor))) {
+        printf("failed: cuxy=%d %d, sub MV(%d, %d), mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvxAbs, mvxAbs+(cxWidth<<shiftHor), tile_left_edge<<shiftHor, tile_right_edge<<shiftHor);
+        outOfBound = true;
+      }
+      if(shiftVer==2 && ((mvyAbs+4*deltaTop[yFrac][xFrac]) < (tile_top_edge<<shiftVer) ||
+                         (mvyAbs+4*deltaBot[yFrac][xFrac]+(cxHeight<<shiftVer)) > (tile_bottom_edge<<shiftVer))) {
+        printf("failed: cuxy=%d %d, sub MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<shiftVer, tile_bottom_edge<<shiftVer);
+        outOfBound = true;
+      }
+
+      if(outOfBound) {
+        exit(EXIT_FAILURE);//assert(0);
+      }
+  }
+
+  if(isChroma(compID))
+  {
+      const UInt ctuRsAddr = cu->getCtuRsAddr();
+      const TComPic* pcPic = cu->getPic();
+      const TComTile &currentTile = *(pcPic->getPicSym()->getTComTile(pcPic->getPicSym()->getTileIdxMap(ctuRsAddr)));
+      const UInt maxCuWidth  = cu->getSlice()->getSPS()->getMaxCUWidth();
+      const UInt maxCuHeight = cu->getSlice()->getSPS()->getMaxCUHeight();
+      int tile_left_edge   = (currentTile.getFirstCtuRsAddr() % pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuWidth;
+      int tile_top_edge    = (currentTile.getFirstCtuRsAddr() / pcPic->getPicSym()->getFrameWidthInCtus()) * maxCuHeight;
+      int tile_right_edge  = std::min<Int>((currentTile.getRightEdgePosInCtus() + 1) * maxCuWidth, refPic->getWidth(COMPONENT_Y));  // calculate use luma MV
+      int tile_bottom_edge = std::min<Int>((currentTile.getBottomEdgePosInCtus() + 1) * maxCuHeight, refPic->getHeight(COMPONENT_Y));
+      int mvxAbs = mv->getHor()+(cu->getCUPelX()<<2);   // calculate use luma MV
+      int mvyAbs = mv->getVer()+(cu->getCUPelY()<<2);
+      Bool outOfBound = false;
+
+//      if(cu->getCUPelX()==240 && cu->getCUPelY()==1072) {
+//        printf("kelvin: cuxy=%d %d, MV(%d, %d), mvxAbs [%d, %d) out of tile hor boudary [%d, %d) right=min(%d, %d), width=%d\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvxAbs, mvxAbs+width, tile_left_edge<<2, tile_right_edge<<2, (currentTile.getRightEdgePosInCtus() + 1) * maxCuWidth, refPic->getWidth(compID), width);
+//        printf("kelvin: cuxy=%d %d, MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d) shiftHor=%d, shiftVer=%d, xFrac=%d, yFrac=%d, height=%d, cwheight<<shiftVer=%d\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvyAbs, mvyAbs+height, tile_top_edge<<2, tile_bottom_edge<<2, shiftHor, shiftVer, xFrac, yFrac, height, (cxHeight<<shiftVer));
+//      }
+      // check luma sub MVs with interpolation filter
+#if 1
+      if(shiftHor==3 && xFrac==4 && 
+        ((mvxAbs-6) < (tile_left_edge<<2) || (mvxAbs+6+(width<<2)) > (tile_right_edge<<2))) {
+        printf("failed: cuxy=%d %d, chroma%d sub MV(%d, %d), mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), compID, mv->getHor(), mv->getVer(), mvxAbs-6, mvxAbs+6+(width<<2), tile_left_edge<<2, tile_right_edge<<2);
+        outOfBound = true;
+      }
+      if(shiftVer==3 && yFrac==4 &&
+        ((mvyAbs-6) < (tile_top_edge<<2) || (mvyAbs+6+(height<<2)) > (tile_bottom_edge<<2))) {
+        printf("failed: cuxy=%d %d, chroma%d sub MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), compID, mv->getHor(), mv->getVer(), mvyAbs-6, mvyAbs+6+(height<<2), tile_top_edge<<2, tile_bottom_edge<<2);
+        outOfBound = true;
+      }
+#else
+      if(cu->getCUPelX()==736 && cu->getCUPelY()==128) {
+        printf("kelvin: cuxy=%d %d, MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d) shiftHor=%d, shiftVer=%d, xFrac=%d, yFrac=%d\n", cu->getCUPelX(), cu->getCUPelY(), mv->getHor(), mv->getVer(), mvyAbs, mvyAbs+(cxHeight<<shiftVer), tile_top_edge<<2, tile_bottom_edge<<2, shiftHor, shiftVer, xFrac, yFrac);
+      }
+      if(shiftHor==3 && xFrac==4 && 
+        ((mvxAbs-6) < (tile_left_edge<<2) || (mvxAbs+6+(cxWidth<<shiftHor)) > (tile_right_edge<<2))) {
+        printf("failed: cuxy=%d %d, chroma%d sub MV(%d, %d), mvxAbs [%d, %d) out of tile hor boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), compID, mv->getHor(), mv->getVer(), mvxAbs-6, mvxAbs+6+(cxWidth<<shiftHor), tile_left_edge<<2, tile_right_edge<<2);
+        outOfBound = true;
+      }
+      if(shiftVer==3 && yFrac==4 &&
+        ((mvyAbs-6) < (tile_top_edge<<2) || (mvyAbs+6+(cxHeight<<shiftVer)) > (tile_bottom_edge<<2))) {
+        printf("failed: cuxy=%d %d, chroma%d sub MV(%d, %d), mvyAbs [%d, %d) out of tile ver boudary [%d, %d)\n", cu->getCUPelX(), cu->getCUPelY(), compID, mv->getHor(), mv->getVer(), mvyAbs-6, mvyAbs+6+(cxHeight<<shiftVer), tile_top_edge<<2, tile_bottom_edge<<2);
+#endif
+
+      if(outOfBound) {
         exit(EXIT_FAILURE);//assert(0);
       }
   }
